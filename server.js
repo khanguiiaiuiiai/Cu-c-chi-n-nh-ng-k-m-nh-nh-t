@@ -13,6 +13,7 @@ function findGame() {   // tìm file game ở nhiều chỗ: public/, cùng thư
 }
 const server = http.createServer((req, res) => {
   if (req.url === '/health') { res.writeHead(200); return res.end('ok'); }
+  if (req.url === '/version') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('server v2 (có findGame). Game: ' + (findGame() || 'KHONG THAY') + '\nThư mục gốc: ' + ls(__dirname).join(', ') + '\npublic: ' + (ls(path.join(__dirname, 'public')).join(', ') || 'trống')); }
   const f = findGame();
   if (!f) {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
