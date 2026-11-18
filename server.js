@@ -4,12 +4,23 @@ const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3000, MAX = 6;
 const RELAY = new Set(['st', 'sk', 'm1', 'hitc', 'ctr', 'fdrop', 'vz', 'kill']);
 
+function ls(d){ try { return fs.readdirSync(d); } catch (e) { return []; } }
+function findGame() {   // tìm file game ở nhiều chỗ: public/, cùng thư mục server.js, tên bất kỳ *.html
+  const dirs = [path.join(__dirname, 'public'), __dirname];
+  for (const d of dirs) if (fs.existsSync(path.join(d, 'index.html'))) return path.join(d, 'index.html');
+  for (const d of dirs) { const h = ls(d).find(f => /\.html?$/i.test(f)); if (h) return path.join(d, h); }
+  return null;
+}
 const server = http.createServer((req, res) => {
   if (req.url === '/health') { res.writeHead(200); return res.end('ok'); }
-  const f = path.join(__dirname, 'public', 'index.html');
+  const f = findGame();
+  if (!f) {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Server đang chạy nhưng CHƯA có file game.\nHãy đưa index.html vào thư mục public/ trong repo GitHub.\n\nServer đang thấy:\n- thư mục gốc: ' + ls(__dirname).join(', ') + '\n- public/: ' + (ls(path.join(__dirname, 'public')).join(', ') || '(trống / không tồn tại)'));
+  }
   fs.readFile(f, (e, d) => {
-    if (e) { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Multiversal War server đang chạy.'); }
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(d);
+    if (e) { res.writeHead(500); return res.end('Không đọc được file game'); }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' }); res.end(d);
   });
 });
 const wss = new WebSocketServer({ server, maxPayload: 4096 });
