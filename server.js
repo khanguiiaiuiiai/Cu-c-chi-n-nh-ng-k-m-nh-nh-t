@@ -1,7 +1,7 @@
 // Server online cho Multiversal War: phòng tối đa 6 người, chuyển tiếp tin nhắn giữa các client.
 const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
-const PORT = process.env.PORT || 3000, MAX = 6;
+const PORT = process.env.PORT || 3000, MAXBY = { ffa: 6, solo: 2, rank: 2 };
 const RELAY = new Set(['st', 'sk', 'm1', 'hitc', 'ctr', 'fdrop', 'vz', 'kill']);
 
 function ls(d){ try { return fs.readdirSync(d); } catch (e) { return []; } }
@@ -31,13 +31,13 @@ let seq = 1;
 const send = (ws, o) => { if (ws.readyState === 1) ws.send(JSON.stringify(o)); };
 const bcast = (room, o, except) => { for (const w of room.players.values()) if (w !== except) send(w, o); };
 function newCode() { let c; do c = String(100000 + Math.floor(Math.random() * 900000)); while (rooms.has(c)); return c; }
-function getRoom(req) {
-  if (/^\d{6}$/.test(req)) {       // vào đúng server bằng mã 6 số (tạo mới nếu chưa có)
-    if (!rooms.has(req)) rooms.set(req, { code: req, priv: true, players: new Map() });
+function getRoom(req, mode) {
+  if (/^\d{6}$/.test(req)) {       // vào đúng server bằng mã 6 số (tạo mới nếu chưa có, chế độ theo người tạo)
+    if (!rooms.has(req)) rooms.set(req, { code: req, priv: true, mode, players: new Map() });
     return rooms.get(req);
   }
-  for (const r of rooms.values()) if (!r.priv && r.players.size > 0 && r.players.size < MAX) return r;   // ghép ngẫu nhiên
-  const code = newCode(); const r = { code, priv: false, players: new Map() }; rooms.set(code, r); return r;
+  for (const r of rooms.values()) if (!r.priv && r.mode === mode && r.players.size > 0 && r.players.size < MAXBY[mode]) return r;   // ghép ngẫu nhiên cùng chế độ
+  const code = newCode(); const r = { code, priv: false, mode, players: new Map() }; rooms.set(code, r); return r;
 }
 
 wss.on('connection', ws => {
@@ -48,10 +48,10 @@ wss.on('connection', ws => {
     if (m.t === 'info') {
       const name = String(m.name || 'Player').slice(0, 14), h = m.h | 0;
       if (!ws.room) {
-        const room = getRoom(String(m.room || 'random'));
-        if (room.players.size >= MAX) { send(ws, { t: 'full' }); return; }
+        const mode = MAXBY[m.mode] ? m.mode : 'ffa', room = getRoom(String(m.room || 'random'), mode);
+        if (room.players.size >= MAXBY[room.mode]) { send(ws, { t: 'full' }); return; }
         ws.id = 'p' + (seq++); ws.room = room; ws.name = name; ws.h = h;
-        send(ws, { t: 'welcome', id: ws.id, room: room.code, players: [...room.players.values()].map(w => ({ id: w.id, name: w.name, h: w.h })) });
+        send(ws, { t: 'welcome', id: ws.id, room: room.code, mode: room.mode, players: [...room.players.values()].map(w => ({ id: w.id, name: w.name, h: w.h })) });
         room.players.set(ws.id, ws);
         bcast(room, { t: 'join', p: { id: ws.id, name, h } }, ws);
       } else {
